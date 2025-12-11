@@ -39,3 +39,66 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+.env/
+env.bak/
+.venv.bak/
+
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Optional cache directory
+.cache/
+
+# Optional REPL history
+.node_repl_history
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# CSV files (if they're large/generated data files)
+*.csv
+!backend/model/*.csv  # Keep this if you want to track your specific CSV files
+
+# Temporary files
+*.tmp
+*.temp
