@@ -24,17 +24,6 @@ load_dotenv()
 
 MONGODB_URI = os.getenv("MONGODB_URI")
 
-#try:
-    #client = AsyncIOMotorClient(
-        #MONGODB_URI,
-        #tls=True,
-        #tlsCAFile=certifi.where()
-    #)
-    #db = client["resume"]
-    #print("✓ MongoDB connected")
-#except Exception as e:
-    #print("❌ MongoDB connection failed:", e)
-
 # Load environment variables
 load_dotenv()
 
@@ -118,8 +107,6 @@ class MongoDB:
         except Exception as e:
             logger.error(f"❌ MongoDB connection failed: {e}")
             logger.info("💡 Using in-memory storage for development")
-
-
 
     def get_collection(self, collection_name: str):
         if self.db is None:
@@ -228,7 +215,91 @@ def verify_token(token: str):
         return None
 
 # ============================================================================
-# ATS MODEL AND JOB RECOMMENDATION CODE
+# SKILL EXTRACTION FUNCTIONS
+# ============================================================================
+
+def extract_skills_intelligent(text):
+    """Enhanced skill extraction with better pattern matching"""
+    text_lower = text.lower()
+    
+    # Comprehensive skill variations with case-insensitive matching
+    skill_variations = {
+        # Programming Languages
+        'python': ['python', 'py'],
+        'java': ['java', 'j2ee', 'j2se'],
+        'javascript': ['javascript', 'js'],
+        'c': ['\\bc\\b', '\\bc,', ', c,', ' c '],  # Careful matching for 'C'
+        'c++': ['c++', 'cpp', 'c/c++'],
+        
+        # Frontend Technologies
+        'react': ['react', 'reactjs', 'react.js'],
+        'html': ['html', 'html5'],
+        'css': ['css', 'css3'],
+        
+        # Backend & Frameworks
+        'flask': ['flask'],
+        'django': ['django'],
+        'node': ['node', 'nodejs', 'node.js'],
+        'express': ['express'],
+        
+        # Databases
+        'sql': ['sql', 'mysql', 'postgresql', 'postgres'],
+        'mysql': ['mysql', 'my/sql'],
+        'mongodb': ['mongodb', 'mongo'],
+        
+        # Data Science & ML
+        'machine learning': ['machine learning', 'ml', 'scikit', 'scikit-learn', 'scikit learn'],
+        'ai': ['ai', 'artificial intelligence'],
+        'numpy': ['numpy'],
+        'pandas': ['pandas'],
+        'data analysis': ['data analysis', 'data analytics'],
+        
+        # Cloud & DevOps
+        'aws': ['aws', 'amazon web services'],
+        'docker': ['docker'],
+        'kubernetes': ['kubernetes', 'k8s'],
+        
+        # Tools & Version Control
+        'git': ['git', 'github', 'gitlab'],
+        'github': ['github'],
+        'canva': ['canva'],
+        
+        # Methodologies
+        'agile': ['agile', 'scrum'],
+        
+        # Soft Skills (for comprehensive matching)
+        'communication': ['communication'],
+        'teamwork': ['teamwork', 'team work'],
+        'leadership': ['leadership'],
+        'problem solving': ['problem-solving', 'problem solving'],
+    }
+    
+    detected_skills = set()
+    
+    for skill, variations in skill_variations.items():
+        for variation in variations:
+            # Use word boundaries for better matching
+            if '\\b' in variation:
+                # Regex patterns
+                import re
+                if re.search(variation, text_lower):
+                    detected_skills.add(skill)
+                    break
+            else:
+                # Simple substring matching
+                if variation in text_lower:
+                    detected_skills.add(skill)
+                    break
+    
+    detected_list = list(detected_skills)
+    
+    # Log for debugging
+    logger.info(f"🎯 Skills detected: {sorted(detected_list)}")
+    
+    return detected_list
+
+# ============================================================================
+# REQUEST/RESPONSE MODELS
 # ============================================================================
 
 # Request/Response models for ATS
@@ -244,13 +315,9 @@ class RecommendationRequest(BaseModel):
 class JobRecommendation(BaseModel):
     id: str
     title: str
-    company: str
-    location: str
     match_score: float
     required_skills: List[str]
     missing_skills: List[str]
-    salary_range: str
-    experience_level: str
     description: str
 
 class PredictionResponse(BaseModel):
@@ -258,6 +325,10 @@ class PredictionResponse(BaseModel):
     confidence: float
     job_recommendations: List[JobRecommendation]
     features_used: Dict[str, Any]
+
+# ============================================================================
+# ATS MODEL
+# ============================================================================
 
 class ATSModel:
     """Load and use trained ATS scoring model"""
@@ -430,6 +501,10 @@ class ATSModel:
             }
         }
 
+# ============================================================================
+# GEMINI JOB RECOMMENDER
+# ============================================================================
+
 class GeminiJobRecommender:
     """Job Recommender using Gemini Flash AI"""
     
@@ -467,10 +542,10 @@ RESUME:
 ATS SCORE: {ats_score}/100
 
 🎯 STRICT REQUIREMENTS:
-- ONLY recommend *technical roles*.
-- DO NOT recommend: Project Manager, Scrum Master, Consultant, Team Lead, Architect, or any non-coding roles.
-- Roles MUST involve software development or data-related work.
-- Skills to match: Python, JavaScript, React, HTML, CSS, MySQL, MongoDB, NumPy, Pandas, Scikit-learn, Java, C, C++, Flask.
+- ONLY recommend *technical roles or tech related roles*.
+- DO NOT recommend: Scrum Master, Consultant, Architect, Manager, Director.
+- Roles MUST involve software development, data science, or engineering work.
+- Focus on these skill areas: Python, JavaScript, React, HTML, CSS, MySQL, MongoDB, NumPy, Pandas, Scikit-learn, Java, C, C++, Flask.
 - Roles must be one of the following types only:
     * Backend Developer (Python)
     * Full Stack Developer (React + Python)
@@ -479,6 +554,8 @@ ATS SCORE: {ats_score}/100
     * Data Analyst / ML Engineer
     * API Developer
     * Database Engineer
+    * Python Developer
+    * Web Developer
 
 Return EXACT JSON (no markdown, no explanation):
 
@@ -487,24 +564,22 @@ Return EXACT JSON (no markdown, no explanation):
     {{
       "id": "job_1",
       "title": "Job Title",
-      "company": "Company Name",
-      "location": "Location",
       "match_score": 85.5,
-      "required_skills": ["Skill1", "Skill2", "Skill3"],
-      "missing_skills": ["Skill4"],
-      "salary_range": "$80,000 - $120,000",
-      "experience_level": "Entry/Mid/Senior",
-      "description": "Short technical job description"
+      "required_skills": ["Python", "Flask", "MySQL"],
+      "missing_skills": ["MongoDB"],
+      "description": "Short technical job description focused on what the role involves"
     }}
   ]
 }}
 
 Rules:
-- Match score must reflect skill overlap.
-- Required skills must be technical only.
-- Missing skills must be realistic and minimal.
-- No managerial roles.
-- No soft-skill-only recommendations.
+- Do NOT include: company, location, salary_range, experience_level, job_type, posted_date.
+- Match score must reflect skill overlap (0-100).
+- Required skills must be technical only (5-8 skills per job).
+- Missing skills should be 1-3 realistic skills the resume lacks.
+- Description should be 1-2 sentences about what the role involves.
+- Generate 5 job recommendations.
+- Focus on entry-level to mid-level roles for students/early career.
 """
 
             logger.info(f"🤖 Sending request to Gemini with {len(limited_resume)} chars")
@@ -572,184 +647,252 @@ Rules:
             return self.fallback_recommendations(resume_text, ats_score, top_k)
 
     def fallback_recommendations(self, resume_text: str, ats_score: float, top_k: int = 5) -> List[Dict[str, Any]]:
-        """Improved fallback job recommendations with better skill matching"""
+        """Improved fallback with proper role-level matching"""
         
-        def extract_skills_intelligent(text):
-            text_lower = text.lower()
-            
-            skill_variations = {
-                'python': ['python', 'py'],
-                'javascript': ['javascript', 'js', 'ecmascript'],
-                'java': ['java', 'j2ee', 'j2se'],
-                'react': ['react', 'reactjs', 'react.js'],
-                'node': ['node', 'nodejs', 'node.js'],
-                'sql': ['sql', 'mysql', 'postgresql', 'postgres', 'oracle'],
-                'html': ['html', 'html5'],
-                'css': ['css', 'css3'],
-                'mongodb': ['mongodb', 'mongo'],
-                'aws': ['aws', 'amazon web services'],
-                'docker': ['docker', 'container'],
-                'kubernetes': ['kubernetes', 'k8s'],
-                'git': ['git', 'github', 'gitlab'],
-                'rest': ['rest', 'restful', 'rest api'],
-                'typescript': ['typescript', 'ts'],
-                'angular': ['angular', 'angularjs'],
-                'vue': ['vue', 'vuejs'],
-                'django': ['django'],
-                'flask': ['flask'],
-                'spring': ['spring', 'spring boot'],
-                'c++': ['c++', 'cpp'],
-                'c#': ['c#', 'csharp'],
-                'php': ['php'],
-                'ruby': ['ruby', 'rails'],
-                'go': ['go', 'golang'],
-                'rust': ['rust'],
-                'machine learning': ['machine learning', 'ml', 'ai'],
-                'tensorflow': ['tensorflow', 'tf'],
-                'pytorch': ['pytorch'],
-                'pandas': ['pandas'],
-                'numpy': ['numpy'],
-                'scikit': ['scikit', 'sklearn']
-            }
-            
-            detected_skills = []
-            for skill, variations in skill_variations.items():
-                for variation in variations:
-                    if variation in text_lower:
-                        detected_skills.append(skill)
-                        break
-            
-            return list(set(detected_skills))
-
-        # Extract skills from resume
         detected_skills = extract_skills_intelligent(resume_text)
         logger.info(f"🎯 Detected skills in resume: {detected_skills}")
         
-        # Enhanced job templates with realistic requirements
-        job_templates = [
-            {
-                'id': 'FB_1', 
-                'title': 'Full Stack Developer', 
-                'company': 'Tech Solutions Inc',
-                'location': 'Remote', 
-                'required_skills': ['JavaScript', 'React', 'Node', 'HTML', 'CSS', 'SQL'],
-                'salary_range': '$90,000 - $140,000', 
-                'experience_level': 'Mid-level',
-                'description': 'Develop and maintain web applications using modern technologies.'
-            },
-            {
-                'id': 'FB_2', 
-                'title': 'Python Developer', 
-                'company': 'Data Corp',
-                'location': 'San Francisco, CA', 
-                'required_skills': ['Python', 'Django', 'SQL', 'REST', 'Git'],
-                'salary_range': '$85,000 - $130,000', 
-                'experience_level': 'Mid-level', 
-                'description': 'Backend development with Python and web frameworks.'
-            },
-            {
-                'id': 'FB_3', 
-                'title': 'Software Engineer', 
-                'company': 'Software Labs',
-                'location': 'Austin, TX', 
-                'required_skills': ['Java', 'Python', 'Git', 'SQL', 'REST'],
-                'salary_range': '$95,000 - $145,000', 
-                'experience_level': 'Mid-level',
-                'description': 'Software development and engineering positions.'
-            },
-            {
-                'id': 'FB_4', 
-                'title': 'Data Analyst', 
-                'company': 'Analytics Pro',
-                'location': 'Chicago, IL', 
-                'required_skills': ['Python', 'SQL', 'Machine Learning', 'Pandas', 'Statistics'],
-                'salary_range': '$80,000 - $120,000', 
-                'experience_level': 'Entry-level',
-                'description': 'Analyze data and generate insights for business decisions.'
-            },
-            {
-                'id': 'FB_5', 
-                'title': 'Frontend Developer', 
-                'company': 'Web Innovations',
-                'location': 'New York, NY', 
-                'required_skills': ['JavaScript', 'React', 'HTML', 'CSS', 'TypeScript'],
-                'salary_range': '$85,000 - $135,000', 
-                'experience_level': 'Mid-level',
-                'description': 'Create responsive and interactive user interfaces.'
-            }
-        ]
+        # Determine experience level
+        is_student = any(term in resume_text.lower() for term in ['student', 'pursuing', 'b.tech', 'bachelor', 'undergraduate'])
+        is_intern = any(term in resume_text.lower() for term in ['intern', 'internship', 'trainee'])
+        is_senior = any(term in resume_text.lower() for term in ['director', 'vp', 'vice president', 'chief', 'principal'])
         
+        # Extract years of experience
+        experience_years = 0
+        exp_patterns = [
+            r'(\d+)\+?\s*years?',
+            r'over\s+(\d+)\s*years?',
+            r'(\d+)\s*years?\s*(?:of\s+)?experience'
+        ]
+        for pattern in exp_patterns:
+            matches = re.findall(pattern, resume_text.lower())
+            if matches:
+                experience_years = max([int(m) for m in matches])
+                break
+        
+        # Override experience for students
+        if is_student or is_intern:
+            experience_years = 0
+        
+        logger.info(f"📊 Profile: Student={is_student}, Intern={is_intern}, Years={experience_years}")
+        
+        # Build job templates based on profile
+        job_templates = []
+        
+        # ENTRY-LEVEL / STUDENT ROLES (0-2 years)
+        if is_student or is_intern or experience_years < 2:
+            job_templates.extend([
+                {
+                    'id': 'ENT_1',
+                    'title': 'Junior Full Stack Developer',
+                    'company': 'StartUp Innovations',
+                    'location': 'Bangalore, India',
+                    'required_skills': ['Python', 'React', 'HTML', 'CSS', 'JavaScript'],
+                    'salary_range': '₹3.5 - ₹6 LPA',
+                    'experience_level': 'Entry-level (0-1 years)',
+                    'description': 'Build web applications using React and Flask. Perfect for recent graduates.'
+                },
+                {
+                    'id': 'ENT_2',
+                    'title': 'Frontend Developer - Intern',
+                    'company': 'Web Solutions Pvt Ltd',
+                    'location': 'Hyderabad, India',
+                    'required_skills': ['React', 'JavaScript', 'HTML', 'CSS', 'Git'],
+                    'salary_range': '₹2.5 - ₹4.5 LPA',
+                    'experience_level': 'Fresher (0-1 years)',
+                    'description': 'Create responsive user interfaces with modern JavaScript frameworks.'
+                },
+                {
+                    'id': 'ENT_3',
+                    'title': 'Python Developer - Entry Level',
+                    'company': 'Tech Academy Solutions',
+                    'location': 'Pune, India',
+                    'required_skills': ['Python', 'Flask', 'SQL', 'Git'],
+                    'salary_range': '₹3 - ₹5.5 LPA',
+                    'experience_level': 'Fresher (0-1 years)',
+                    'description': 'Develop backend services and APIs using Python and Flask framework.'
+                },
+                {
+                    'id': 'ENT_4',
+                    'title': 'Data Analyst - Junior',
+                    'company': 'Analytics Corp India',
+                    'location': 'Chennai, India',
+                    'required_skills': ['Python', 'Pandas', 'NumPy', 'SQL', 'Data Analysis'],
+                    'salary_range': '₹3.5 - ₹6 LPA',
+                    'experience_level': 'Entry-level (0-2 years)',
+                    'description': 'Analyze data using Python libraries and generate insights for business decisions.'
+                },
+                {
+                    'id': 'ENT_5',
+                    'title': 'Software Developer Trainee',
+                    'company': 'Code Academy India',
+                    'location': 'Mumbai, India',
+                    'required_skills': ['Java', 'Python', 'SQL', 'Git', 'Problem Solving'],
+                    'salary_range': '₹3 - ₹5 LPA',
+                    'experience_level': 'Fresher (0-1 years)',
+                    'description': 'Join our training program to learn industry-standard development practices.'
+                },
+                {
+                    'id': 'ENT_6',
+                    'title': 'ML Engineer - Fresher',
+                    'company': 'AI Innovations Lab',
+                    'location': 'Bangalore, India',
+                    'required_skills': ['Python', 'Machine Learning', 'NumPy', 'Pandas', 'AI'],
+                    'salary_range': '₹4 - ₹7 LPA',
+                    'experience_level': 'Entry-level (0-1 years)',
+                    'description': 'Work on machine learning projects using scikit-learn and Python.'
+                }
+            ])
+        
+        # MID-LEVEL ROLES (3-7 years)
+        elif experience_years >= 3 and experience_years < 8:
+            job_templates.extend([
+                {
+                    'id': 'MID_1',
+                    'title': 'Full Stack Developer',
+                    'company': 'Digital Solutions Ltd',
+                    'location': 'Bangalore, India',
+                    'required_skills': ['JavaScript', 'React', 'Node', 'SQL', 'Git'],
+                    'salary_range': '₹8 - ₹15 LPA',
+                    'experience_level': 'Mid-level (3-6 years)',
+                    'description': 'Develop and maintain full-stack applications with modern tech stack.'
+                },
+                {
+                    'id': 'MID_2',
+                    'title': 'Backend Engineer',
+                    'company': 'Cloud Systems Inc',
+                    'location': 'Hyderabad, India',
+                    'required_skills': ['Python', 'Java', 'SQL', 'MongoDB', 'AWS'],
+                    'salary_range': '₹10 - ₹18 LPA',
+                    'experience_level': 'Mid-level (4-7 years)',
+                    'description': 'Build robust backend systems and REST APIs for enterprise apps.'
+                },
+                {
+                    'id': 'MID_3',
+                    'title': 'Data Scientist',
+                    'company': 'Analytics Pro India',
+                    'location': 'Pune, India',
+                    'required_skills': ['Python', 'Machine Learning', 'Pandas', 'SQL', 'AI'],
+                    'salary_range': '₹12 - ₹20 LPA',
+                    'experience_level': 'Mid-level (4-7 years)',
+                    'description': 'Develop ML models and perform advanced data analysis.'
+                }
+            ])
+        
+        # SENIOR ROLES (8+ years)
+        elif experience_years >= 8 or is_senior:
+            job_templates.extend([
+                {
+                    'id': 'SR_1',
+                    'title': 'Senior Engineering Manager',
+                    'company': 'Tech Innovators Inc',
+                    'location': 'Bangalore, India',
+                    'required_skills': ['Leadership', 'Agile', 'Python', 'Java', 'AWS'],
+                    'salary_range': '₹25 - ₹40 LPA',
+                    'experience_level': 'Senior (10+ years)',
+                    'description': 'Lead engineering teams in delivering scalable software solutions.'
+                },
+                {
+                    'id': 'SR_2',
+                    'title': 'Director of Engineering',
+                    'company': 'Enterprise Solutions',
+                    'location': 'Hyderabad, India',
+                    'required_skills': ['Leadership', 'AWS', 'Agile', 'SQL'],
+                    'salary_range': '₹30 - ₹50 LPA',
+                    'experience_level': 'Director (12+ years)',
+                    'description': 'Drive technical strategy and manage multiple engineering teams.'
+                }
+            ])
+        
+        # Calculate match scores
         def calculate_match_score(job_skills, user_skills, ats_score):
             def normalize_skill(skill):
-                return skill.lower().replace('.', '').replace(' ', '').replace('-', '')
-            
+                return skill.lower().replace('.', '').replace(' ', '').replace('-', '').replace('/', '')
+    
             user_skills_normalized = [normalize_skill(skill) for skill in user_skills]
             job_skills_normalized = [normalize_skill(skill) for skill in job_skills]
-            
+    
             matches = 0
             missing_skills = []
-            
-            for job_skill in job_skills_normalized:
+    
+            # Better matching with variations
+            skill_variations = {
+                'mysql': ['mysql', 'sql'],
+                'mongodb': ['mongodb', 'mongo'],
+                'sql': ['sql', 'mysql', 'postgresql'],
+                'python': ['python', 'py'],
+                'javascript': ['javascript', 'js'],
+                'react': ['react', 'reactjs'],
+                'flask': ['flask'],
+                'aws': ['aws'],
+                'azure': ['azure'],
+        }
+    
+            for idx, job_skill in enumerate(job_skills_normalized):
                 found = False
+                job_variations = skill_variations.get(job_skill, [job_skill])
+        
                 for user_skill in user_skills_normalized:
-                    if job_skill in user_skill or user_skill in job_skill:
+                    # Direct match
+                    if job_skill == user_skill:
                         matches += 1
                         found = True
                         break
+                    # Partial match
+                    elif job_skill in user_skill or user_skill in job_skill:
+                        matches += 1
+                        found = True
+                        break
+                    # Check variations
+                    elif any(var in user_skill or user_skill in var for var in job_variations):
+                        matches += 1
+                        found = True
+                        break
+        
                 if not found:
-                    missing_skills.append(job_skills[job_skills_normalized.index(job_skill)])
-            
+                    missing_skills.append(job_skills[idx])
+    
             if len(job_skills) > 0:
                 skill_ratio = matches / len(job_skills)
             else:
                 skill_ratio = 0
-                
-            skill_score = skill_ratio * 70
-            ats_contribution = (ats_score / 100) * 25
-            experience_bonus = min(5, len(user_skills) * 0.5)
-            
+    
+            skill_score = skill_ratio * 60
+            ats_contribution = (ats_score / 100) * 30
+            experience_bonus = min(10, len(user_skills) * 0.5)
+    
             total_score = skill_score + ats_contribution + experience_bonus
             final_score = max(40, min(95, total_score))
-            
+    
             return round(final_score, 1), missing_skills
         
-        # Calculate matches for all jobs
+        # Score all jobs
         scored_jobs = []
         for job in job_templates:
             match_score, missing_skills = calculate_match_score(
-                job['required_skills'], 
-                detected_skills, 
+                job['required_skills'],
+                detected_skills,
                 ats_score
             )
             
             scored_jobs.append({
-                'id': job['id'],
-                'title': job['title'],
-                'company': job['company'],
-                'location': job['location'],
-                'match_score': match_score,
-                'required_skills': job['required_skills'],
-                'missing_skills': missing_skills,
-                'salary_range': job['salary_range'],
-                'experience_level': job['experience_level'],
-                'description': job['description']
-            })
+                    'id': job['id'],
+                    'title': job['title'],
+                    'match_score': match_score,
+                    'required_skills': job['required_skills'],
+                    'missing_skills': missing_skills,
+                    'description': job['description']
+                })
         
-        # Sort by match score and return top_k
-        sorted_jobs = sorted(scored_jobs, key=lambda x: x['match_score'], reverse=True)
+        # Sort by match score (deterministic)
+        sorted_jobs = sorted(scored_jobs, key=lambda x: (-x['match_score'], x['id']))
         
-        logger.info(f"🎯 Fallback generated {len(sorted_jobs)} jobs with scores: {[j['match_score'] for j in sorted_jobs[:top_k]]}")
+        logger.info(f"🎯 Generated {len(sorted_jobs)} jobs, top {top_k} matches: {[(j['title'], j['match_score']) for j in sorted_jobs[:top_k]]}")
         
         return sorted_jobs[:top_k]
 
-# Initialize ATS and Gemini models
-logger.info("Initializing ATS Model and Gemini Job Recommender...")
-ats_model = ATSModel()
-gemini_recommender = GeminiJobRecommender(os.getenv('GEMINI_API_KEY'))
-logger.info("✓ ATS and Gemini initialization complete!\n")
-
 # ============================================================================
-# AUTHENTICATION MODELS AND DEPENDENCIES
+# AUTHENTICATION MODELS
 # ============================================================================
 
 # Pydantic Models for Authentication
@@ -772,6 +915,20 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: UserResponse
+
+# ============================================================================
+# INITIALIZE MODELS
+# ============================================================================
+
+# Initialize ATS and Gemini models
+logger.info("Initializing ATS Model and Gemini Job Recommender...")
+ats_model = ATSModel()
+gemini_recommender = GeminiJobRecommender(os.getenv('GEMINI_API_KEY'))
+logger.info("✓ ATS and Gemini initialization complete!\n")
+
+# ============================================================================
+# DEPENDENCIES
+# ============================================================================
 
 # Dependency to get current user
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
